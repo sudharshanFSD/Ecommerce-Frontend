@@ -23,20 +23,21 @@ const CartPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false); // Track if the user is logged in
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCart();
-  }, []);
-
-  const fetchCart = async () => {
     const token = localStorage.getItem('token');
-    if (!token) {
+    if (token) {
+      setIsLoggedIn(true);
+      fetchCart(token);
+    } else {
       setError('Please log in to view your cart');
       navigate('/login');
-      return;
     }
+  }, []);
 
+  const fetchCart = async (token) => {
     try {
       const response = await axios.get('https://ecommerce-1-33ey.onrender.com/apiCart/cart', {
         headers: { Authorization: `Bearer ${token}` },
@@ -46,7 +47,6 @@ const CartPage = () => {
         const productsWithZeroQuantity = response.data.products.map((product) => ({
           ...product,
           quantity: 0, // Set initial quantity to 0
-          product: product.product || {}, // Default to an empty object if no product data is found
         }));
 
         // Calculate total price when cart is fetched
@@ -253,19 +253,13 @@ const CartPage = () => {
             ))}
         </Grid>
       )}
-      <Box sx={{ marginTop: 3 }}>
-        <Typography variant="h6">Total: ${cart.totalPrice}</Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleCheckout}
-          sx={{ marginTop: 3, alignSelf: 'flex-start' }}
-        >
+      <Divider sx={{ marginY: 3 }} />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+        <Typography variant="h6">Total Price: ${cart.totalPrice}</Typography>
+        <Button variant="contained" color="primary" onClick={handleCheckout}>
           Checkout
         </Button>
       </Box>
-      <Divider sx={{ marginY: 3 }} />
-      <BestSellingProducts />
       <Footer />
     </Box>
   );
