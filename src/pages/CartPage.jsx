@@ -25,32 +25,24 @@ const CartPage = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  // Check if the user is logged in, and if not, show an error message
-  const checkLoginStatus = () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setError('Please log in to view your cart or add products.');
-      navigate('/login'); // Redirect to login if not logged in
-      return false;
-    }
-    return true;
-  };
-
   useEffect(() => {
     fetchCart();
   }, []);
 
   const fetchCart = async () => {
-    if (!checkLoginStatus()) return; // Exit if not logged in
-
     const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Please log in to view your cart');
+      navigate('/login');
+      return;
+    }
+
     try {
       const response = await axios.get('https://ecommerce-1-33ey.onrender.com/apiCart/cart', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.data && Array.isArray(response.data.products)) {
-        // Make sure product data exists and is valid
         const productsWithZeroQuantity = response.data.products.map((product) => ({
           ...product,
           quantity: 0, // Set initial quantity to 0
@@ -75,8 +67,24 @@ const CartPage = () => {
     }
   };
 
+  // Recalculate total price whenever cart.products changes
+  useEffect(() => {
+    const totalPrice = cart.products.reduce((total, product) => {
+      return total + (product.totalPrice || 0);
+    }, 0);
+    setCart((prevState) => ({
+      ...prevState,
+      totalPrice,
+    }));
+  }, [cart.products]);
+
   const handleCheckout = async () => {
-    if (!checkLoginStatus()) return; // Exit if not logged in
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Please log in to checkout');
+      navigate('/login');
+      return;
+    }
 
     if (!cart || cart.products.length === 0) {
       setError('Your cart is empty');
@@ -87,7 +95,7 @@ const CartPage = () => {
       const response = await axios.post(
         'https://ecommerce-1-33ey.onrender.com/apiStripe/create-checkout-session',
         { cart },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       const data = response.data;
@@ -104,13 +112,21 @@ const CartPage = () => {
   };
 
   const handleUpdateQuantity = async (productId, newQuantity, size, color) => {
-    if (!checkLoginStatus()) return; // Exit if not logged in
-
     if (newQuantity < 1 || isNaN(newQuantity)) return;
 
     const updatedCart = { ...cart };
 
+    if (!updatedCart.products || updatedCart.products.length === 0) {
+      console.error("No products in the cart");
+      return;
+    }
+
     const productIndex = updatedCart.products.findIndex((item) => {
+      if (!item.product) {
+        console.error("Product object is null or undefined", item);
+        return false;
+      }
+
       return item.product._id === productId && item.size === size && item.color === color;
     });
 
@@ -141,12 +157,14 @@ const CartPage = () => {
   };
 
   const handleRemoveProduct = (productId, size, color) => {
-    if (!checkLoginStatus()) return; // Exit if not logged in
-
     const updatedCart = { ...cart };
 
     const productIndex = updatedCart.products.findIndex(
-      (item) => item.product._id === productId && item.size === size && item.color === color
+      (item) =>
+        item.product &&
+        item.product._id === productId &&
+        item.size === size &&
+        item.color === color
     );
 
     if (productIndex !== -1) {
@@ -185,14 +203,14 @@ const CartPage = () => {
       ) : (
         <Grid container spacing={4}>
           {cart.products
-            .filter(({ product }) => product?._id && product?.images?.[0]) 
+            .filter(({ product }) => product?._id && product?.images?.[0]) // Filter out products with missing _id or image
             .map(({ product, quantity, size, color }) => (
               <Grid item xs={12} md={6} key={`${product._id}-${size}-${color}`}>
                 <Card sx={{ display: 'flex', borderRadius: 2, boxShadow: 3 }}>
                   <CardMedia
                     component="img"
                     sx={{ width: 180, height: 180, objectFit: 'cover', margin: 2 }}
-                    image={product?.images?.[0] || 'default-image.jpg'}
+                    image={product?.images?.[0] || 'default-image.jpg'} // Safe fallback for missing images
                     alt={product?.title || 'Product Image'}
                   />
                   <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, padding: 2 }}>
@@ -241,12 +259,12 @@ const CartPage = () => {
           variant="contained"
           color="primary"
           onClick={handleCheckout}
-          sx={{ marginTop: 3, alignSelf: 'flex-end' }}
+          sx={{ marginTop: 3, alignSelf: 'flex-start' }}
         >
-          Proceed to Checkout
+          Checkout
         </Button>
       </Box>
-      <Divider sx={{ marginTop: 4 }} />
+      <Divider sx={{ marginY: 3 }} />
       <BestSellingProducts />
       <Footer />
     </Box>
