@@ -10,6 +10,7 @@ import {
   TextField,
   Divider,
   Button,
+  Alert,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useNavigate } from 'react-router-dom';
@@ -23,37 +24,39 @@ const CartPage = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // Track if the user is logged in
+  const [loginAlert, setLoginAlert] = useState(false); // State to handle login alert
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setIsLoggedIn(true);
-      fetchCart(token);
-    } else {
-      setError('Please log in to view your cart');
-      navigate('/login');
-    }
+    fetchCart();
   }, []);
 
-  const fetchCart = async (token) => {
+  const fetchCart = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setError('Please log in to view your cart');
+      navigate('/login');
+      return;
+    }
+  
     try {
       const response = await axios.get('https://ecommerce-1-33ey.onrender.com/apiCart/cart', {
         headers: { Authorization: `Bearer ${token}` },
       });
-
+  
       if (response.data && Array.isArray(response.data.products)) {
+        // Make sure product data exists and is valid
         const productsWithZeroQuantity = response.data.products.map((product) => ({
           ...product,
           quantity: 0, // Set initial quantity to 0
+          product: product.product || {}, // Default to an empty object if no product data is found
         }));
-
+  
         // Calculate total price when cart is fetched
         const totalPrice = productsWithZeroQuantity.reduce((total, product) => {
           return total + (product.totalPrice || 0);
         }, 0);
-
+  
         setCart({ ...response.data, products: productsWithZeroQuantity, totalPrice });
       } else {
         setError('Invalid cart data received from server');
@@ -67,7 +70,6 @@ const CartPage = () => {
     }
   };
 
-  // Recalculate total price whenever cart.products changes
   useEffect(() => {
     const totalPrice = cart.products.reduce((total, product) => {
       return total + (product.totalPrice || 0);
@@ -111,11 +113,20 @@ const CartPage = () => {
     }
   };
 
+  const handleAddToCart = (productId, quantity) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setLoginAlert(true); // Trigger the login alert if not logged in
+      return;
+    }
+    // Proceed with the add to cart action
+    // Make sure to implement the logic for adding the product to the cart here
+  };
+
   const handleUpdateQuantity = async (productId, newQuantity, size, color) => {
     if (newQuantity < 1 || isNaN(newQuantity)) return;
 
     const updatedCart = { ...cart };
-
     if (!updatedCart.products || updatedCart.products.length === 0) {
       console.error("No products in the cart");
       return;
@@ -126,7 +137,6 @@ const CartPage = () => {
         console.error("Product object is null or undefined", item);
         return false;
       }
-
       return item.product._id === productId && item.size === size && item.color === color;
     });
 
@@ -158,7 +168,6 @@ const CartPage = () => {
 
   const handleRemoveProduct = (productId, size, color) => {
     const updatedCart = { ...cart };
-
     const productIndex = updatedCart.products.findIndex(
       (item) =>
         item.product &&
@@ -198,6 +207,11 @@ const CartPage = () => {
       <Typography variant="h4" gutterBottom>
         Shopping Cart
       </Typography>
+      {loginAlert && (
+        <Alert severity="warning" onClose={() => setLoginAlert(false)}>
+          Please log in to add items to your cart.
+        </Alert>
+      )}
       {cart.products.length === 0 ? (
         <Typography>Your cart is empty</Typography>
       ) : (
@@ -236,30 +250,34 @@ const CartPage = () => {
                           handleUpdateQuantity(product._id, parseInt(e.target.value), size, color)
                         }
                         fullWidth
-                        sx={{ marginTop: 2 }}
+                        variant="outlined"
+                        margin="normal"
+                        InputProps={{
+                          inputProps: { min: 1 },
+                        }}
                       />
-                      <Button
-                        color="secondary"
-                        sx={{ marginTop: 2 }}
-                        startIcon={<DeleteIcon />}
-                        onClick={() => handleRemoveProduct(product._id, size, color)}
-                      >
-                        Remove
-                      </Button>
                     </CardContent>
+                    <Button
+                      color="error"
+                      onClick={() => handleRemoveProduct(product._id, size, color)}
+                      startIcon={<DeleteIcon />}
+                    >
+                      Remove
+                    </Button>
                   </Box>
                 </Card>
               </Grid>
             ))}
         </Grid>
       )}
-      <Divider sx={{ marginY: 3 }} />
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+      <Divider sx={{ marginY: 2 }} />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', padding: 2 }}>
         <Typography variant="h6">Total Price: ${cart.totalPrice}</Typography>
-        <Button variant="contained" color="primary" onClick={handleCheckout}>
-          Checkout
+        <Button variant="contained" onClick={handleCheckout}>
+          Proceed to Checkout
         </Button>
       </Box>
+      <BestSellingProducts />
       <Footer />
     </Box>
   );
